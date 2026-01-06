@@ -98,7 +98,7 @@ import { ref } from 'vue'
 import { useContactsStore, type Contact } from '../stores/contacts'
 import AddContactModal from './AddContactModal.vue'
 
-const emit = defineEmits<{
+defineEmits<{
   'select-contact': [contact: Contact]
 }>()
 

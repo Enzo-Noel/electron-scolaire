@@ -22,6 +22,11 @@ interface P2PChatAPI {
     stop: () => Promise<GunServerResult>
     getStatus: () => Promise<GunServerStatus>
   }
+  window: {
+    minimize: () => void
+    maximize: () => void
+    close: () => void
+  }
 }
 
 declare global {

@@ -123,10 +123,9 @@ onMounted(() => {
 
   // Pour les clients (non-hôtes), surveiller l'état de connexion
   if (!connectionStore.isHost) {
-    // Surveiller les événements de connexion Gun
-    let lastHeartbeat = Date.now()
+    let lastActivity = Date.now()
+    let lastLoggedState: boolean | null = null
     let connectionCheckInterval: ReturnType<typeof setInterval> | null = null
-    let lastLoggedState: boolean | null = null // Pour éviter le spam de logs
 
     // Écouter le signal de fermeture intentionnelle du serveur
     gun.get('server/status').on((data: any) => {
@@ -140,50 +139,56 @@ onMounted(() => {
       }
     })
 
-    gun.on('hi', (peer: any) => {
-      // Logger seulement si l'état change
-      if (lastLoggedState !== true) {
-        console.log('[Connection] Connecté au serveur')
-        lastLoggedState = true
-      }
-      connectionStore.setConnected(true)
-      lastHeartbeat = Date.now()
-    })
-
-    gun.on('bye', (peer: any) => {
-      // Logger seulement si l'état change
-      if (lastLoggedState !== false) {
-        console.log('[Connection] Déconnecté du serveur')
-        lastLoggedState = false
-      }
-      connectionStore.setConnected(false)
-    })
-
-    // Écouter tous les événements pour mettre à jour le heartbeat
-    // IMPORTANT: 'in' peut se déclencher avec du cache, donc on ne change PAS l'état ici
-    // On laisse le heartbeat checker décider si on est vraiment connecté
-    gun.on('in', () => {
-      // Mettre à jour le heartbeat uniquement si on est déjà connecté
-      // Cela évite les faux positifs de reconnexion avec des données en cache
-      if (connectionStore.isConnected) {
-        lastHeartbeat = Date.now()
-      }
-    })
-
-    // Vérifier le heartbeat toutes les 3 secondes
-    connectionCheckInterval = setInterval(() => {
-      const timeSinceLastHeartbeat = Date.now() - lastHeartbeat
-      const isCurrentlyConnected = timeSinceLastHeartbeat < 8000 // 8 secondes de timeout
-
-      if (isCurrentlyConnected !== connectionStore.isConnected) {
-        // Logger seulement quand l'état change
-        if (lastLoggedState !== isCurrentlyConnected) {
-          console.log(`[Connection] ${isCurrentlyConnected ? 'Connecté' : 'Déconnecté'}`)
-          lastLoggedState = isCurrentlyConnected
+    // Événement 'hi': connexion établie avec un peer
+    gun.on('hi', () => {
+      lastActivity = Date.now()
+      if (!connectionStore.isConnected) {
+        if (lastLoggedState !== true) {
+          console.log('[Connection] Connecté au serveur')
+          lastLoggedState = true
         }
-        connectionStore.setConnected(isCurrentlyConnected)
+        connectionStore.setConnected(true)
       }
-    }, 3000)
+    })
+
+    // Événement 'bye': peer déconnecté
+    gun.on('bye', () => {
+      if (connectionStore.isConnected) {
+        if (lastLoggedState !== false) {
+          console.log('[Connection] Peer déconnecté')
+          lastLoggedState = false
+        }
+        connectionStore.setConnected(false)
+      }
+    })
+
+    // Événement 'in': données reçues (maintient la connexion active)
+    gun.on('in', () => {
+      lastActivity = Date.now()
+    })
+
+    // Vérifier périodiquement si on reçoit toujours des données
+    connectionCheckInterval = setInterval(() => {
+      const timeSinceActivity = Date.now() - lastActivity
+      const shouldBeConnected = timeSinceActivity < 15000 // 15 secondes sans activité = déconnecté
+
+      if (shouldBeConnected !== connectionStore.isConnected) {
+        if (lastLoggedState !== shouldBeConnected) {
+          console.log(`[Connection] ${shouldBeConnected ? 'Connecté' : 'Déconnecté'} (vérification activité)`)
+          lastLoggedState = shouldBeConnected
+        }
+        connectionStore.setConnected(shouldBeConnected)
+      }
+
+      // Si déconnecté, forcer une tentative de reconnexion en lisant des données
+      if (!connectionStore.isConnected) {
+        console.log('[Connection] Tentative de reconnexion...')
+        // Lire le statut du serveur pour forcer Gun à essayer de se reconnecter
+        gun.get('server/status').once(() => {
+          // Cette lecture force Gun à tenter une connexion
+        })
+      }
+    }, 5000) // Vérifier toutes les 5 secondes
 
     // Nettoyer l'intervalle au démontage
     onUnmounted(() => {
