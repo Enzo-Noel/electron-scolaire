@@ -1,22 +1,23 @@
 <template>
   <div class="app-container">
-    <LoginView v-if="!userStore.isLoggedIn" @login="handleLogin" />
-    <ChatRoom v-else />
+    <TitleBar />
+    <div class="app-content">
+      <LoginView v-if="!userStore.isLoggedIn" @login="handleLogin" />
+      <ChatRoom v-else />
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { onMounted, onUnmounted } from 'vue'
 import { useUserStore } from './stores/user'
-import { useRoomStore } from './stores/room'
+import TitleBar from './components/TitleBar.vue'
 import LoginView from './components/LoginView.vue'
 import ChatRoom from './components/ChatRoom.vue'
 
 const userStore = useUserStore()
-const roomStore = useRoomStore()
 
 let unsubscribeUsers: (() => void) | null = null
-let unsubscribeRooms: (() => void) | null = null
 
 const handleLogin = async (username: string) => {
   await userStore.login(username)
@@ -26,9 +27,6 @@ const handleLogin = async (username: string) => {
 const setupSubscriptions = () => {
   // S'abonner aux utilisateurs
   unsubscribeUsers = userStore.subscribeToUsers()
-
-  // S'abonner aux rooms
-  unsubscribeRooms = roomStore.subscribeToRooms()
 }
 
 onMounted(() => {
@@ -41,7 +39,6 @@ onMounted(() => {
 onUnmounted(() => {
   // Nettoyer les abonnements
   if (unsubscribeUsers) unsubscribeUsers()
-  if (unsubscribeRooms) unsubscribeRooms()
 })
 </script>
 
@@ -54,5 +51,13 @@ onUnmounted(() => {
   color: #e0e0e0;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell,
     sans-serif;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-content {
+  flex: 1;
+  overflow: hidden;
+  margin-top: 32px; /* Hauteur de la titlebar */
 }
 </style>

@@ -7,3 +7,11 @@ out
 .vscode
 build
 .claude
+gun-data
+
+# Fichiers temporaires
+*.tmp
+*.temp
+.tmp/
+tmp/
+temp/

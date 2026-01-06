@@ -31,6 +31,7 @@ function createWindow(): void {
     minHeight: 600,
     show: false,
     autoHideMenuBar: true,
+    frame: false, // Supprimer la barre de titre par défaut
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
@@ -201,6 +202,27 @@ function createMenu(): void {
 // IPC Handlers
 ipcMain.handle('app:getVersion', () => app.getVersion())
 ipcMain.handle('app:getPlatform', () => process.platform)
+
+// Window Control Handlers
+ipcMain.handle('window:minimize', () => {
+  mainWindow?.minimize()
+})
+
+ipcMain.handle('window:maximize', () => {
+  if (mainWindow?.isMaximized()) {
+    mainWindow?.unmaximize()
+  } else {
+    mainWindow?.maximize()
+  }
+})
+
+ipcMain.handle('window:close', () => {
+  mainWindow?.close()
+})
+
+ipcMain.handle('window:isMaximized', () => {
+  return mainWindow?.isMaximized()
+})
 
 // Gun Server Handlers
 ipcMain.handle('gun:startServer', async (_, port?: number) => {

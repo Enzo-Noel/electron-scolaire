@@ -1,13 +1,13 @@
 <template>
   <div class="message-list" ref="messageContainer">
-    <div v-if="chatStore.currentRoomMessages.length === 0" class="empty-state">
+    <div v-if="chatStore.sortedMessages.length === 0" class="empty-state">
       <p>Aucun message pour le moment</p>
       <p class="hint">Soyez le premier à envoyer un message !</p>
     </div>
 
     <div v-else class="messages">
       <div
-        v-for="message in chatStore.currentRoomMessages"
+        v-for="message in chatStore.sortedMessages"
         :key="message.id"
         class="message"
         :class="{ 'own-message': message.username === userStore.currentUser }"
@@ -16,14 +16,22 @@
           <span class="message-username">{{ message.username }}</span>
           <span class="message-time">{{ formatTime(message.timestamp) }}</span>
         </div>
-        <div class="message-content">{{ message.text }}</div>
+
+        <!-- Message avec fichier -->
+        <div v-if="message.fileTransfer" class="message-with-file">
+          <FileMessage :fileTransfer="message.fileTransfer" />
+          <div v-if="message.text" class="message-content file-caption">{{ message.text }}</div>
+        </div>
+
+        <!-- Message texte simple -->
+        <div v-else class="message-content">{{ message.text }}</div>
       </div>
     </div>
 
-    <div v-if="chatStore.typingUsers.length > 0" class="typing-indicator">
+    <div v-if="otherTypingUsers.length > 0" class="typing-indicator">
       <span class="typing-text">
-        {{ formatTypingUsers(chatStore.typingUsers) }}
-        {{ chatStore.typingUsers.length === 1 ? 'est en train d\'écrire' : 'sont en train d\'écrire' }}
+        {{ formatTypingUsers(otherTypingUsers) }}
+        {{ otherTypingUsers.length === 1 ? 'est en train d\'écrire' : 'sont en train d\'écrire' }}
       </span>
       <span class="typing-dots">
         <span></span>
@@ -35,13 +43,19 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, nextTick } from 'vue'
+import { ref, computed, watch, nextTick } from 'vue'
 import { useChatStore } from '../stores/chat'
 import { useUserStore } from '../stores/user'
+import FileMessage from './FileMessage.vue'
 
 const chatStore = useChatStore()
 const userStore = useUserStore()
 const messageContainer = ref<HTMLElement | null>(null)
+
+// Filtrer les utilisateurs qui tapent (sans l'utilisateur actuel)
+const otherTypingUsers = computed(() => {
+  return chatStore.typingUsers.filter((user) => user !== userStore.currentUser)
+})
 
 // Formater le temps
 const formatTime = (timestamp: number): string => {
@@ -66,11 +80,10 @@ const formatTime = (timestamp: number): string => {
 
 // Formater la liste des utilisateurs qui tapent
 const formatTypingUsers = (users: string[]): string => {
-  const filtered = users.filter((u) => u !== userStore.currentUser)
-  if (filtered.length === 0) return ''
-  if (filtered.length === 1) return filtered[0]
-  if (filtered.length === 2) return `${filtered[0]} et ${filtered[1]}`
-  return `${filtered.slice(0, -1).join(', ')} et ${filtered[filtered.length - 1]}`
+  if (users.length === 0) return ''
+  if (users.length === 1) return users[0]
+  if (users.length === 2) return `${users[0]} et ${users[1]}`
+  return `${users.slice(0, -1).join(', ')} et ${users[users.length - 1]}`
 }
 
 // Auto-scroll vers le bas quand de nouveaux messages arrivent
@@ -84,7 +97,7 @@ const scrollToBottom = () => {
 
 // Observer les changements de messages
 watch(
-  () => chatStore.currentRoomMessages.length,
+  () => chatStore.sortedMessages.length,
   () => {
     scrollToBottom()
   }
@@ -188,6 +201,16 @@ scrollToBottom()
 .own-message .message-content {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: #ffffff;
+}
+
+.message-with-file {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.file-caption {
+  margin-top: 4px;
 }
 
 .typing-indicator {

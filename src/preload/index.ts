@@ -14,6 +14,14 @@ const api = {
     start: (port?: number) => ipcRenderer.invoke('gun:startServer', port),
     stop: () => ipcRenderer.invoke('gun:stopServer'),
     getStatus: () => ipcRenderer.invoke('gun:getServerStatus')
+  },
+
+  // API Window Controls
+  window: {
+    minimize: () => ipcRenderer.invoke('window:minimize'),
+    maximize: () => ipcRenderer.invoke('window:maximize'),
+    close: () => ipcRenderer.invoke('window:close'),
+    isMaximized: () => ipcRenderer.invoke('window:isMaximized')
   }
 }
 

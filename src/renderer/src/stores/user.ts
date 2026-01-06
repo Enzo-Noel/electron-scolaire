@@ -1,15 +1,28 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { gun, type User } from '../gun'
+import { gun, SEA, type User, type KeyPair } from '../gun'
 
 export const useUserStore = defineStore('user', () => {
   const currentUser = ref<string>('')
   const users = ref<Map<string, User>>(new Map())
   const isLoggedIn = ref<boolean>(false)
+  const refreshTrigger = ref(0) // Pour forcer le recalcul de onlineUsers
+  const keyPair = ref<KeyPair | null>(null) // Paire de clés de l'utilisateur actuel
 
   // Liste des utilisateurs en ligne
   const onlineUsers = computed(() => {
-    return Array.from(users.value.values()).filter((user) => user.online)
+    // Force le recalcul en lisant refreshTrigger
+    refreshTrigger.value
+
+    const now = Date.now()
+    const TIMEOUT = 60000 // 60 secondes (2x le heartbeat de 30s)
+
+    return Array.from(users.value.values()).filter((user) => {
+      // Considérer en ligne si:
+      // - Marqué online ET
+      // - lastSeen récent (moins de 60 secondes)
+      return user.online && user.lastSeen && now - user.lastSeen < TIMEOUT
+    })
   })
 
   // Nombre d'utilisateurs en ligne
@@ -22,16 +35,23 @@ export const useUserStore = defineStore('user', () => {
     }
 
     try {
+      // Générer une paire de clés pour l'utilisateur
+      const pair = await SEA.pair()
+      keyPair.value = pair as KeyPair
+
       const user: User = {
         username: username.trim(),
         online: true,
-        lastSeen: Date.now()
+        lastSeen: Date.now(),
+        publicKey: pair.pub // Stocker la clé publique
       }
 
       gun.get('chat/users').get(user.username).put(user)
 
       currentUser.value = username.trim()
       isLoggedIn.value = true
+
+      console.log('[Crypto] Paire de clés générée pour', username.trim())
 
       // Mettre à jour le statut en ligne périodiquement
       startHeartbeat()
@@ -48,6 +68,7 @@ export const useUserStore = defineStore('user', () => {
         gun.get('chat/users').get(currentUser.value).put({ online: false, lastSeen: Date.now() })
         currentUser.value = ''
         isLoggedIn.value = false
+        keyPair.value = null // Effacer la paire de clés
         stopHeartbeat()
       } catch (error) {
         console.error('Erreur lors de la déconnexion:', error)
@@ -57,6 +78,7 @@ export const useUserStore = defineStore('user', () => {
 
   // Heartbeat pour maintenir le statut en ligne
   let heartbeatInterval: ReturnType<typeof setInterval> | null = null
+  let refreshInterval: ReturnType<typeof setInterval> | null = null
 
   function startHeartbeat() {
     if (heartbeatInterval) return
@@ -70,12 +92,21 @@ export const useUserStore = defineStore('user', () => {
           .put({ online: true, lastSeen: Date.now() })
       }
     }, 30000)
+
+    // Rafraîchir la liste des utilisateurs en ligne toutes les 10 secondes
+    refreshInterval = setInterval(() => {
+      refreshTrigger.value++
+    }, 10000)
   }
 
   function stopHeartbeat() {
     if (heartbeatInterval) {
       clearInterval(heartbeatInterval)
       heartbeatInterval = null
+    }
+    if (refreshInterval) {
+      clearInterval(refreshInterval)
+      refreshInterval = null
     }
   }
 
@@ -109,6 +140,7 @@ export const useUserStore = defineStore('user', () => {
     isLoggedIn,
     onlineUsers,
     onlineCount,
+    keyPair,
     login,
     logout,
     subscribeToUsers,
